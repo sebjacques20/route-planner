@@ -3,8 +3,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import DaySelector from "../components/DaySelector";
+import ViewSwitcher, { type ViewMode } from "../components/ViewSwitcher";
 import AppointmentList from "../components/AppointmentList";
 import RouteMap from "../components/RouteMap";
+import WeekView from "../components/WeekView";
+import MonthView from "../components/MonthView";
 
 interface Appointment {
   id: string;
@@ -23,6 +26,7 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState(
     format(new Date(), "yyyy-MM-dd")
   );
+  const [viewMode, setViewMode] = useState<ViewMode>("day");
   const [amAppointments, setAmAppointments] = useState<Appointment[]>([]);
   const [pmAppointments, setPmAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -55,8 +59,10 @@ export default function Home() {
   }, [selectedDate]);
 
   useEffect(() => {
-    fetchAppointments();
-  }, [fetchAppointments]);
+    if (viewMode === "day") {
+      fetchAppointments();
+    }
+  }, [fetchAppointments, viewMode]);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -115,6 +121,11 @@ export default function Home() {
     }
   };
 
+  const handleDayClickFromView = (date: string) => {
+    setSelectedDate(date);
+    setViewMode("day");
+  };
+
   const allAppointments = [...amAppointments, ...pmAppointments];
 
   return (
@@ -122,23 +133,24 @@ export default function Home() {
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">
-            Route Planner
-          </h1>
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition flex items-center gap-2"
-          >
-            {syncing ? (
-              <>
-                <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                Synchronisation...
-              </>
-            ) : (
-              "Synchroniser Calendly"
-            )}
-          </button>
+          <h1 className="text-2xl font-bold text-gray-900">Route Planner</h1>
+          <div className="flex items-center gap-3">
+            <ViewSwitcher current={viewMode} onChange={setViewMode} />
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition flex items-center gap-2"
+            >
+              {syncing ? (
+                <>
+                  <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                  Sync...
+                </>
+              ) : (
+                "Synchroniser Calendly"
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -148,94 +160,113 @@ export default function Home() {
           <DaySelector
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
+            viewMode={viewMode}
           />
         </div>
 
-        {loading ? (
-          <div className="text-center py-12 text-gray-500">
-            Chargement des rendez-vous...
-          </div>
-        ) : (
-          <>
-            {/* Optimize Buttons */}
-            <div className="flex gap-4">
-              <button
-                onClick={() => handleOptimize("AM")}
-                disabled={optimizing || amAppointments.length === 0}
-                className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
-              >
-                {optimizing
-                  ? "Optimisation..."
-                  : `Optimiser AM (${amAppointments.length} RDV)`}
-              </button>
-              <button
-                onClick={() => handleOptimize("PM")}
-                disabled={optimizing || pmAppointments.length === 0}
-                className="flex-1 px-4 py-3 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 transition"
-              >
-                {optimizing
-                  ? "Optimisation..."
-                  : `Optimiser PM (${pmAppointments.length} RDV)`}
-              </button>
-            </div>
-
-            {/* Route Info */}
-            {(routeInfo.am || routeInfo.pm) && (
-              <div className="flex gap-4">
-                {routeInfo.am && (
-                  <div className="flex-1 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
-                    <strong>AM:</strong> {routeInfo.am.totalDistance} -{" "}
-                    {routeInfo.am.totalDuration}
-                  </div>
-                )}
-                {routeInfo.pm && (
-                  <div className="flex-1 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-                    <strong>PM:</strong> {routeInfo.pm.totalDistance} -{" "}
-                    {routeInfo.pm.totalDuration}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Map */}
-            {allAppointments.some((a) => a.latitude && a.longitude) && (
-              <RouteMap
-                appointments={allAppointments}
-                originLat={originLat}
-                originLng={originLng}
-              />
-            )}
-
-            {/* Appointment Lists */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <AppointmentList
-                title="Matin (AM)"
-                appointments={amAppointments}
-                color="#3b82f6"
-              />
-              <AppointmentList
-                title="Après-midi (PM)"
-                appointments={pmAppointments}
-                color="#f59e0b"
-              />
-            </div>
-          </>
+        {/* View content */}
+        {viewMode === "week" && (
+          <WeekView
+            selectedDate={selectedDate}
+            onDayClick={handleDayClickFromView}
+          />
         )}
 
-        {/* Empty state */}
-        {!loading &&
-          amAppointments.length === 0 &&
-          pmAppointments.length === 0 && (
-            <div className="text-center py-12 bg-white rounded-xl shadow">
-              <p className="text-gray-500 text-lg mb-4">
-                Aucun rendez-vous pour cette date
-              </p>
-              <p className="text-gray-400 text-sm">
-                Cliquez sur &quot;Synchroniser Calendly&quot; pour importer les
-                rendez-vous
-              </p>
-            </div>
-          )}
+        {viewMode === "month" && (
+          <MonthView
+            selectedDate={selectedDate}
+            onDayClick={handleDayClickFromView}
+          />
+        )}
+
+        {viewMode === "day" && (
+          <>
+            {loading ? (
+              <div className="text-center py-12 text-gray-500">
+                Chargement des rendez-vous...
+              </div>
+            ) : (
+              <>
+                {/* Optimize Buttons */}
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => handleOptimize("AM")}
+                    disabled={optimizing || amAppointments.length === 0}
+                    className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
+                  >
+                    {optimizing
+                      ? "Optimisation..."
+                      : `Optimiser AM (${amAppointments.length} RDV)`}
+                  </button>
+                  <button
+                    onClick={() => handleOptimize("PM")}
+                    disabled={optimizing || pmAppointments.length === 0}
+                    className="flex-1 px-4 py-3 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 transition"
+                  >
+                    {optimizing
+                      ? "Optimisation..."
+                      : `Optimiser PM (${pmAppointments.length} RDV)`}
+                  </button>
+                </div>
+
+                {/* Route Info */}
+                {(routeInfo.am || routeInfo.pm) && (
+                  <div className="flex gap-4">
+                    {routeInfo.am && (
+                      <div className="flex-1 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+                        <strong>AM:</strong> {routeInfo.am.totalDistance} -{" "}
+                        {routeInfo.am.totalDuration}
+                      </div>
+                    )}
+                    {routeInfo.pm && (
+                      <div className="flex-1 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+                        <strong>PM:</strong> {routeInfo.pm.totalDistance} -{" "}
+                        {routeInfo.pm.totalDuration}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Map */}
+                {allAppointments.some((a) => a.latitude && a.longitude) && (
+                  <RouteMap
+                    appointments={allAppointments}
+                    originLat={originLat}
+                    originLng={originLng}
+                  />
+                )}
+
+                {/* Appointment Lists */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <AppointmentList
+                    title="Matin (AM)"
+                    appointments={amAppointments}
+                    color="#3b82f6"
+                  />
+                  <AppointmentList
+                    title="Après-midi (PM)"
+                    appointments={pmAppointments}
+                    color="#f59e0b"
+                  />
+                </div>
+
+                {/* Empty state */}
+                {amAppointments.length === 0 &&
+                  pmAppointments.length === 0 && (
+                    <div className="text-center py-12 bg-white rounded-xl shadow">
+                      <p className="text-gray-500 text-lg mb-4">
+                        Aucun rendez-vous pour cette date
+                      </p>
+                      <p className="text-gray-400 text-sm">
+                        Cliquez sur &quot;Synchroniser Calendly&quot; pour
+                        importer les rendez-vous
+                      </p>
+                    </div>
+                  )}
+              </>
+            )}
+          </>
+        )}
       </main>
     </div>
   );
